@@ -1,0 +1,11 @@
+venv/
+__pycache__/
+*.pyc
+.env
+data/*.pkl
+data/*.npy
+vectordb/
+models/*.pkl
+models/*.npy
+models/*.png
+.ipynb_checkpoints/
