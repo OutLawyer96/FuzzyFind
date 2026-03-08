@@ -1,0 +1,14 @@
+version: "3.9"
+services:
+  fuzzyfind:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+      - ./vectordb:/app/vectordb
+      - ./models:/app/models
+    environment:
+      - SIMILARITY_THRESHOLD=0.82
+      - N_CLUSTERS=20
+    restart: unless-stopped

@@ -1,0 +1,63 @@
+# FuzzyFind
+
+FuzzyFind is a semantic search API over the 20 Newsgroups dataset. It uses fuzzy c-means clustering to assign each document (and each query) soft membership across 20 topic clusters, a cluster-bucketed semantic cache to avoid redundant embedding lookups, and FastAPI to expose it over HTTP. The idea is that a document about gun legislation isn't cleanly "politics" or "guns" — fuzzy clustering captures that ambiguity instead of forcing a hard label.
+
+## Setup
+
+```bash
+git clone https://github.com/OutLawyer96/FuzzyFind.git
+cd FuzzyFind
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+## Run the pipeline
+
+These three scripts need to run once in order before the API will start correctly.
+
+```bash
+python scripts/prepare_data.py       # loads 20 Newsgroups, cleans text, saves cleaned_docs.pkl
+python scripts/generate_embeddings.py  # encodes docs with MiniLM-L6-v2, populates ChromaDB
+python scripts/run_clustering.py     # UMAP reduction + fuzzy c-means, saves models/
+```
+
+## Start the API
+
+```bash
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+## Endpoints
+
+```bash
+# semantic search
+curl -X POST http://localhost:8000/query \
+  -H "Content-Type: application/json" \
+  -d '{"query": "NASA space shuttle mission"}'
+
+# cache stats
+curl http://localhost:8000/cache/stats
+
+# clear cache
+curl -X DELETE http://localhost:8000/cache
+
+# health check
+curl http://localhost:8000/health
+```
+
+## How the cache works
+
+When a query comes in, it gets embedded and assigned to a dominant cluster. The cache only scans entries in that same cluster bucket, so lookup time stays roughly constant as the cache grows. Similarity is dot product between L2-normalized vectors, which equals cosine similarity. The default threshold is 0.82 — below that, queries are treated as distinct even if they're topically related. You can change it via the `SIMILARITY_THRESHOLD` env var; 0.90+ makes the cache nearly useless, 0.70 starts producing false hits.
+
+## Why fuzzy clustering
+
+Hard clustering forces every document into exactly one category, which works poorly for news text where topics genuinely overlap. A post about gun control legislation has real membership in both politics and weapons clusters, and surfacing that ambiguity is more honest than picking one. Fuzzy c-means assigns a membership score to every cluster for every document, so the API can tell you not just the dominant cluster but how confidently the query sits there.
+
+## Docker
+
+```bash
+docker-compose up --build
+```
+
+The compose file mounts `data/`, `vectordb/`, and `models/` as volumes so the pipeline output persists across container rebuilds. The pipeline scripts run inside the Docker build step, so the first build will take a while.
